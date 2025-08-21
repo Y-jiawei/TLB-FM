@@ -1,0 +1,65 @@
+1. Introduction
+The Tobacco Leaf Bifacial Feature Measurement (TLB-FM) tool is a MATLAB-based image-processing pipeline designed for analyzing adaxial (upper) and abaxial (lower) sides of tobacco leaves. This tool extracts color (RGB, HSV, LAB) and texture (GLCM-based) features from leaf images, enabling automated classification and quality assessment.
+Key Features:
+(1)Adaxial/Abaxial Separation – Automatically segments leaf surfaces based on adaptive thresholding.
+(2)Shadow & Wrinkle Removal – Reduces interference from natural leaf variations.
+(3)Color & Texture Analysis – Extracts comprehensive feature sets for machine learning applications.
+(4)Reproducibility – Fully scripted in MATLAB with adjustable parameters.
+2. System Requirements
+(1) MATLAB Version	R2020a or later
+(2) Toolboxes Required	Image Processing Toolbox
+(3) Hardware	4GB RAM (8GB recommended)
+(4) GPU acceleration (optional)
+(5) Input Image Format	High-resolution PNG/JPG/TIFF
+3. Step-by-Step Execution Guide
+3.1. Loading and Preprocessing
+(1) Set Image Path:
+Modify imgPath in the script to point to your tobacco leaf image.
+Example: imgPath = 'D:\images\leaf.png';.
+(2)HSV Conversion:
+The RGB image is converted to HSV, extracting Value (V) and Saturation (S) channels for enhanced brightness/texture analysis.
+3.2. Binary Mask Generation
+(1) Thresholding: A preliminary mask is created where V > 0.2 (adjustable for different lighting conditions).
+(2) Morphological Processing:
+imfill removes holes.
+bwareaopen eliminates small noise areas (<500px).
+imclose smooths edges with a disk-shaped structuring element.
+3.3. Shadow & Wrinkle Removal
+(1) Shadow Detection: Regions with V < 0.3 are labeled as shadows and removed.
+(2) Wrinkle Detection:
+Local standard deviation (stdfilt) highlights texture irregularities.
+Otsu’s thresholding (graythresh) dynamically separates wrinkles.
+3.4. Adaxial/Abaxial Segmentation
+(1) Dynamic Weighting:
+Combines V (brightness) and S (saturation) with variance-based weighting.
+Final separation uses an adaptive median threshold.
+(3)Neighborhood Correction:
+Morphological dilation (imdilate) refines boundaries.
+Small regions (<400px) are filtered out.
+3.5. Feature Extraction
+3.5.1. Color Features
+(1) RGB, HSV, and LAB means are computed for each side.
+(2) Example output:
+Adaxial Side Features:  
+Color - RGB: 120.25, 95.34, 80.12  
+Color - HSV: 0.52, 0.35, 0.78  
+Color - LAB: 65.21, 12.34, 18.56
+3.5.2. Texture Features
+Gray-Level Co-occurrence Matrix (GLCM) calculates:
+Energy, Contrast, Homogeneity, Correlation.
+Entropy quantifies randomness in pixel intensities.
+4.Parameter Customization
+V threshold (binary)	0.2 	Increase for darker leaves.
+Shadow threshold (V)	0.3	 Reduce if shadows are misclassified.
+Minimum region size	 400 px	 Larger values reduce noise.
+Neighborhood size 	2 px 	Adjust for boundary smoothness.
+5.Output Visualization
+(1)Overlay Image:
+Adaxial (red) and abaxial (blue) regions are superimposed on the original image.
+Use imshow (combinedOverlay) to display results.
+(2)Console Output:
+Feature values are printed in MATLAB’s command window for further analysis.
+6.Troubleshooting
+Incomplete leaf segmentation: Adjust V threshold or clean the image.
+Over-segmentation: Increase minimum region size.
+Slow execution: Downsample large images or enable GPU.
