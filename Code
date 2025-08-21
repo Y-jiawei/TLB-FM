@@ -1,0 +1,152 @@
+clc;
+clear;
+close all;
+
+%% 1. Image Loading and Display
+imgPath = 'D:\matlab\leaf2\1.png';  % Original image path
+img = imread(imgPath);
+
+%% 2. Convert to HSV Color Space and Extract V-Channel
+hsvImg = rgb2hsv(double(img) / 255);  % Convert to HSV
+vChannel = hsvImg(:,:,3);  % Extract Value channel
+sChannel = hsvImg(:,:,2);  % Extract Saturation channel
+
+% Create initial binary mask (V > 0.2 as foreground)
+binaryMask = vChannel > 0.2;  
+binaryMask = imfill(binaryMask, 'holes');  % Fill holes
+binaryMask = bwareaopen(binaryMask, 500);  % Remove small noise
+se = strel('disk', 5);  % Structural element
+closedMask = imclose(binaryMask, se);  % Close operation to fill gaps
+
+%% Remove Interference Regions Based on V-Channel
+% Shadow/crack detection
+shadowMask = vChannel > 0.3; 
+shadowMask = ~bwareaopen(shadowMask, 100);  % Remove small regions
+
+% Wrinkle detection
+localStd = stdfilt(vChannel, true(5));  % Local standard deviation
+stdThreshold = graythresh(localStd);  % Adaptive threshold
+wrinkleMask1 = localStd > stdThreshold;  % Detect wrinkle regions
+wrinkleMask = imdilate(wrinkleMask1, strel('disk', 3));  % Dilate to cover full wrinkles
+
+% Final leaf mask
+finalMask = closedMask & ~shadowMask & ~wrinkleMask;
+
+%% 5. Adaxial/Abaxial Separation
+% Extract masked region features
+vMasked = vChannel .* finalMask;  % Masked Value channel
+sMasked = sChannel .* finalMask;  % Masked Saturation channel
+
+% Dynamic weight adjustment
+vVar = var(vMasked(vMasked > 0));
+sVar = var(sMasked(sMasked > 0));
+totalVar = vVar + sVar;
+
+vWeight = vVar / totalVar;
+sWeight = sVar / totalVar;
+
+% Combined score calculation
+combinedScore = vWeight * vMasked + sWeight * sMasked;
+threshold = median(combinedScore(combinedScore > 0));  % Adaptive threshold
+
+abaxialMask = finalMask & (combinedScore <= threshold);  % Abaxial side
+adaxialMask = finalMask & ~abaxialMask;  % Adaxial side
+
+%% 6. Neighborhood Correction
+neighborhoodSize = 2;
+se = strel('disk', neighborhoodSize);
+
+% Dilate and correct by majority class
+adaxialMaskDilated = imdilate(adaxialMask, se);
+abaxialMaskDilated = imdilate(abaxialMask, se);
+
+% Correct misclassified regions
+adaxialMask = (adaxialMaskDilated & ~abaxialMaskDilated) & finalMask;
+abaxialMask = (abaxialMaskDilated & ~adaxialMaskDilated) & finalMask;
+
+% Remove small regions
+adaxialMask = bwareaopen(adaxialMask, 400);  % Remove isolated areas < 400px
+abaxialMask = bwareaopen(abaxialMask, 400);
+
+%% 7. Overlay Adaxial/Abaxial Regions on Original Image
+combinedOverlay = img;  % Original image for overlay
+
+% Adaxial regions in red
+combinedOverlay(:,:,1) = min(combinedOverlay(:,:,1) + uint8(adaxialMask) * 255, 255);
+combinedOverlay(:,:,2:3) = combinedOverlay(:,:,2:3) .* uint8(~adaxialMask);
+
+% Abaxial regions in blue
+combinedOverlay(:,:,3) = min(combinedOverlay(:,:,3) + uint8(abaxialMask) * 255, 255);
+combinedOverlay(:,:,1:2) = combinedOverlay(:,:,1:2) .* uint8(~abaxialMask);
+
+% Display result
+figure, imshow(combinedOverlay), title('Adaxial (Red) / Abaxial (Blue) Overlay on Original Image');
+
+%% 8. Color and Texture Feature Extraction
+% Adaxial side features
+rgbAdaxial = img .* uint8(repmat(adaxialMask, [1 1 3]));  % Extract RGB
+hsvAdaxial = rgb2hsv(double(rgbAdaxial) / 255);  % Convert to HSV
+labAdaxial = rgb2lab(rgbAdaxial);  % Convert to LAB
+
+% Adaxial color means
+meanRGBAdaxial = mean(reshape(rgbAdaxial(repmat(adaxialMask, [1, 1, 3])), [], 3));
+hueValuesAdaxial = hsvAdaxial(:,:,1);
+saturationValuesAdaxial = hsvAdaxial(:,:,2);
+valueValuesAdaxial = hsvAdaxial(:,:,3);
+meanHSVAdaxial = [mean(hueValuesAdaxial(adaxialMask)),...
+                  mean(saturationValuesAdaxial(adaxialMask)),...
+                  mean(valueValuesAdaxial(adaxialMask))];
+luminanceValuesAdaxial = labAdaxial(:,:,1);
+aValuesAdaxial = labAdaxial(:,:,2);
+bValuesAdaxial = labAdaxial(:,:,3);
+meanLABAdaxial = [mean(luminanceValuesAdaxial(adaxialMask)),...
+                  mean(aValuesAdaxial(adaxialMask)),...
+                  mean(bValuesAdaxial(adaxialMask))];
+
+% Adaxial texture features
+grayAdaxial = rgb2gray(rgbAdaxial);  % Convert to grayscale
+glcmAdaxial = graycomatrix(grayAdaxial, 'Offset', [0 1]);  % GLCM
+statsAdaxial = graycoprops(glcmAdaxial, {'Energy', 'Contrast', 'Homogeneity', 'Correlation'});
+entropyAdaxial = entropy(grayAdaxial);  % Entropy
+
+% Print adaxial features
+fprintf('Adaxial Side Features:\n');
+fprintf('Color - RGB: %.2f, %.2f, %.2f\n', meanRGBAdaxial);
+fprintf('Color - HSV: %.2f, %.2f, %.2f\n', meanHSVAdaxial);
+fprintf('Color - LAB: %.2f, %.2f, %.2f\n', meanLABAdaxial);
+fprintf('Texture - Energy: %.4f, Contrast: %.4f, Homogeneity: %.4f, Correlation: %.4f, Entropy: %.4f\n',...
+    statsAdaxial.Energy, statsAdaxial.Contrast, statsAdaxial.Homogeneity, statsAdaxial.Correlation, entropyAdaxial);
+
+% Abaxial side features
+rgbAbaxial = img .* uint8(repmat(abaxialMask, [1 1 3]));
+hsvAbaxial = rgb2hsv(double(rgbAbaxial) / 255);
+labAbaxial = rgb2lab(rgbAbaxial);
+
+% Abaxial color means
+meanRGBAbaxial = mean(reshape(rgbAbaxial(repmat(abaxialMask, [1, 1, 3])), [], 3));
+hueValuesAbaxial = hsvAbaxial(:,:,1);
+saturationValuesAbaxial = hsvAbaxial(:,:,2);
+valueValuesAbaxial = hsvAbaxial(:,:,3);
+meanHSVAbaxial = [mean(hueValuesAbaxial(abaxialMask)),...
+                  mean(saturationValuesAbaxial(abaxialMask)),...
+                  mean(valueValuesAbaxial(abaxialMask))];
+luminanceValuesAbaxial = labAbaxial(:,:,1);
+aValuesAbaxial = labAbaxial(:,:,2);
+bValuesAbaxial = labAbaxial(:,:,3);
+meanLABAbaxial = [mean(luminanceValuesAbaxial(abaxialMask)),...
+                  mean(aValuesAbaxial(abaxialMask)),...
+                  mean(bValuesAbaxial(abaxialMask))];
+
+% Abaxial texture features
+grayAbaxial = rgb2gray(rgbAbaxial);
+glcmAbaxial = graycomatrix(grayAbaxial, 'Offset', [0 1]);
+statsAbaxial = graycoprops(glcmAbaxial, {'Energy', 'Contrast', 'Homogeneity', 'Correlation'});
+entropyAbaxial = entropy(grayAbaxial);
+
+% Print abaxial features
+fprintf('\nAbaxial Side Features:\n');
+fprintf('Color - RGB: %.2f, %.2f, %.2f\n', meanRGBAbaxial);
+fprintf('Color - HSV: %.2f, %.2f, %.2f\n', meanHSVAbaxial);
+fprintf('Color - LAB: %.2f, %.2f, %.2f\n', meanLABAbaxial);
+fprintf('Texture - Energy: %.4f, Contrast: %.4f, Homogeneity: %.4f, Correlation: %.4f, Entropy: %.4f\n',...
+    statsAbaxial.Energy, statsAbaxial.Contrast, statsAbaxial.Homogeneity, statsAbaxial.Correlation, entropyAbaxial);
