@@ -37,3 +37,33 @@ Place your test images in the `samples/` folder or any directory of your choice.
 Open `main.m` in the MATLAB Editor. Locate **Line 18**:
 ```matlab
 imgPath = 'samples/sample_01.jpg'; % Update this path
+Change the string to point to your target image file.
+
+Step 3: Execution
+Click the Run button in the MATLAB toolbar or press F5.
+
+Step 4: Interpret Results
+The script will generate:
+
+Console Output: Processing time (e.g., "Processing completed in 1.49 seconds.").
+Figure Window: An overlay image showing the segmentation results:
+Red Regions: Identified Adaxial (Upper) Surface.
+Blue Regions: Identified Abaxial (Lower) Surface.
+Original Color: Background or filtered artifacts (shadows/stems).
+
+4. Version Control & Reproducibility
+Versioning: This project utilizes Semantic Versioning (SemVer). The current release is v1.0.0, corresponding to the code used in the published manuscript.
+Reproducibility: To reproduce the results reported in the paper, use the images provided in the samples/ folder. While the full dataset is restricted, these samples are validated to produce consistent segmentation metrics.
+
+5. Troubleshooting
+Error: "Undefined function 'bwareaopen'..."
+Solution: Ensure the Image Processing Toolbox is installed and licensed.
+Poor Segmentation Results:
+Solution: The model parameters (e.g., threshold 0.2 for V channel) are optimized for standard curing factory lighting (approx. 6500K). For images with significantly different lighting, adjust the thresholds in Section 2 of the script.
+
+6. License
+This software is open-source and available under the MIT License.
+
+Copyright (c) 2024 [Your Name/Institution]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software... (Standard MIT Text)
